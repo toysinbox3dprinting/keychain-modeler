@@ -1,0 +1,39 @@
+# To use create-react-app with typescript template
+with combination of normal ESM modules as well as commonjs (i.e. custom library),
+one must configure the babel configs that react-scripts uses to transpile 
+the typescript/javascript output to accept "multiple module schemes". To do this:
+
+1) Open /node_modules/react-scripts/config/webpack.config.js
+
+2) Go to the babel-loader config options and add the code:
+
+sourceType: "unambiguous"
+
+to the config object.
+
+3) Transpiling should now output valid modules to run in the browser. 
+
+4) Note that Typescript output/module is "commonjs" and target is "ES2016".
+
+
+
+# For the exported page to work on a subpath under index ("/") such as "/hellomunchkin-2023",
+one must perform the following changes:
+
+1) Open /package.json and add the code:
+
+"homepage": "/hellomunchkin-2023/"
+
+to the JSON object. Note that this is an absolute (?) path, not a relative.
+
+2) Navigate to "App.tsx" (whever the React base app is). Normally, the router interprets "/"
+but we need to change it to the following code (or an equivalent):
+
+const router = createBrowserRouter([
+  {
+    path: "/hellomunchkin-2023",
+    element: (<HomePage></HomePage>),
+  },
+]);
+
+which will allow us to put our files in the correct subdirectory and things will run as expected.

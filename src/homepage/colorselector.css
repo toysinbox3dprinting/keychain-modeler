@@ -1,0 +1,35 @@
+.color-container {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.color-block {
+    margin: 2px !important;
+
+    border: 2px solid darkgray !important;
+    border-radius: 2px !important;
+}
+
+@media only screen and (max-width: 1200px) {
+    .color-block { 
+        width: 2rem;
+        height: 2rem;
+
+        min-width: 2rem  !important;
+        min-height: 2rem !important;
+        max-width: 2rem !important;
+        max-height: 2rem !important;
+    }
+}
+
+@media only screen and (min-width: 1200px) {
+    .color-block { 
+        width: 3rem;
+        height: 3rem;
+
+        min-width: 3rem !important;
+        min-height: 3rem !important;
+        max-width: 3rem !important;
+        max-height: 3rem !important;
+    }
+}
