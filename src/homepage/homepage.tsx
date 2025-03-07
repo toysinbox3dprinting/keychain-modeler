@@ -5,7 +5,7 @@ import './homepage.css';
 import * as THREE from 'three';
 import { Canvas, RootState, useFrame, useThree } from "@react-three/fiber";
 import { createBox } from "../kernel/createBox";
-import { Point } from "../lib/geometry";
+import { Point, Polyhedron } from "../lib/geometry";
 import { CSGToData } from "../lib/CSGToData";
 import { OrbitControls } from '@react-three/drei'
 import './homepage.css';
@@ -26,6 +26,7 @@ import { ColorSelector } from "./colorselector";
 import LogoImage from '../resources/logo_transparent.png';
 import { EmojiSelector } from "./emojiselector";
 import { createSVG } from "../kernel/createSVG";
+import { ToysinboxLoginCredentials, ServerRequestStatus, ClientRequestResult, TaskConvertConfig, TaskSliceConfig } from "./shared_types";
 
 let spinning = true;
 let groupRef: any = undefined;
@@ -65,6 +66,8 @@ export interface HomePageState {
     baseIndexBuffer: Uint16Array;
     baseGeometry: THREE.BufferGeometry;
     baseMaterial: THREE.MeshBasicMaterial;
+
+    ready_to_slice: boolean;
 }
 
 export class HomePage extends React.Component<{}, HomePageState> {
@@ -104,6 +107,8 @@ export class HomePage extends React.Component<{}, HomePageState> {
             baseIndexBuffer: new Uint16Array(),
             baseGeometry: new THREE.BufferGeometry(),
             baseMaterial: new THREE.MeshBasicMaterial(),
+
+            ready_to_slice: false
         };
 
         this.groupRef = React.createRef();
@@ -115,6 +120,18 @@ export class HomePage extends React.Component<{}, HomePageState> {
         this.generateKeychainBase();
 
         this.generate3DModel = this.generate3DModel.bind(this);
+
+        login(
+            {
+                token: '',
+                rest_server: `https://asunder.app`,
+                websocket_server: `wss://wss.asunder.app`
+            }, 
+            false, 
+            () => {
+                this.setState({ready_to_slice: true});
+            }
+        );
     }
 
     loadModelToScene(vertices: number[][], indices: number[][]) {
@@ -228,7 +245,7 @@ export class HomePage extends React.Component<{}, HomePageState> {
     }
 
     generateKeychainBase(){
-        const textBaseBox = createBox(new Point(0, 0, 0), 60, 20, 5);
+        const textBaseBox: Polyhedron = createBox(new Point(0, 0, 0), 60, 20, 5);
         const textBaseCylinder = createCylinder(10, 5, 64);
         textBaseCylinder.translate(0, 10, 0);
         const textBaseHole = createCylinder(2.5, 10, 64);
@@ -255,24 +272,8 @@ export class HomePage extends React.Component<{}, HomePageState> {
         });
     }
 
-    download(filename: string, data: string){
-        const lines = data.split('\n').map(line => {
-            if(line.slice(0, 1) != 'v'){
-                return line;
-            } else {
-                // v -14.470452261306537 157.8768715083799 70 0.0
-                const params = line.split(' ').slice(1).map(n => parseFloat(n) / 10);
-                params[0] *= -1; params[1] *= -1;
-                params[0] += -25; params[1] += 10;
-                params[0] *= 10; params[1] *= 10; params[2] *= 10;
-                const newLine = ['v', ...params].join(' ');
-    
-                return newLine;
-            }
-        });
-    
-        const newData = lines.join('\n');
-        const blob = new Blob([newData], {type: 'text/csv'});
+    download(filename: string, data: string | File){
+        const blob = new Blob([data], {type: 'text/csv'});
         const elem = window.document.createElement('a');
         elem.href = window.URL.createObjectURL(blob);
         elem.download = filename;        
@@ -281,7 +282,28 @@ export class HomePage extends React.Component<{}, HomePageState> {
         document.body.removeChild(elem);
     }
 
-    generate3DModel(){
+    async download_x3g(obj_data: string){
+        console.log(obj_data);
+
+        const obj_file = new File(
+            [obj_data], 
+            'model.obj', 
+            {
+                type: 'text/plain',
+                lastModified: new Date().getTime(),
+            }
+        );
+        // this.download('model.obj', obj_file);
+
+        const stl_file = await convert({ input_format: 'obj', target_format: 'stl' }, obj_file);
+
+        // this.download('model.stl', stl_file);
+
+        const x3g_file = await slice({ input_format: 'stl', layer_height: 0.2 }, stl_file);
+        this.download('model.x3g', x3g_file);
+    }
+
+    generate3DModel(slice = false){
         createText(this.state.text, BebasFont, 5, 2, 16).then(async (text) => {
             const correctedText = text //.flipY();
 
@@ -359,16 +381,38 @@ export class HomePage extends React.Component<{}, HomePageState> {
             const entireKeychain = textBase.union(top);
             const data = CSGToData(entireKeychain.exportFlipped());
         
-            this.download(`keychain-${this.state.text}.obj`, `
+            const obj_file_name = `keychain-${this.state.text}.obj`;
+            const obj_file_contents = `
 # File generated by Keychain Generator
 # Joshua Yang - Kauhentus - Toysinbox 3D Printing
 g keychain
 # Vertices
-${data.vertices.map(v => `v ${v[0]} ${v[1]} ${v[2]} 0.0`).join('\r\n')}
+${data.vertices.map(v => `v ${v[0]} ${v[1]} ${v[2]} 10.0`).join('\r\n')}
 
 # Indices
 ${data.indices.map(i => `f ${i[0] + 1} ${i[1] + 1} ${i[2] + 1}`).join('\r\n')}`
-            );
+
+            const lines = obj_file_contents.split('\n').map(line => {
+                if(line.slice(0, 1) != 'v'){
+                    return line;
+                } else {
+                    // v -14.470452261306537 157.8768715083799 70 0.0
+                    const params = line.split(' ').slice(1).map(n => parseFloat(n) / 10);
+                    params[0] *= -1; params[1] *= -1;
+                    params[0] += -25; params[1] += 10;
+                    params[0] *= 10; params[1] *= 10; params[2] *= 10;
+                    const newLine = ['v', ...params].join(' ');
+
+                    return newLine;
+                }
+            });
+            const rescaled_obj_file_contents = lines.join('\n');
+
+            if(!slice){
+                this.download(obj_file_name, rescaled_obj_file_contents);
+            } else {
+                this.download_x3g(rescaled_obj_file_contents);
+            }
         });
     }
 
@@ -532,51 +576,302 @@ ${data.indices.map(i => `f ${i[0] + 1} ${i[1] + 1} ${i[2] + 1}`).join('\r\n')}`
                 </div>
 
                 <div className="sub-row">
-                    <div className="editor-buttons">
-                        <div className="view-options-label">View Options: </div>
-                        <Button className="editor-button" onClick={() => spinning = true} variant="outlined">
-                            <AutorenewIcon/>
-                        </Button>
-                        <Button className="editor-button" onClick={() => spinning = false} variant="outlined">
-                            <DangerousIcon/>
-                        </Button>
-                        <Button className="editor-button" onClick={() => {
-                            if(this.groupRef){
-                                this.groupRef.current.rotation.set(
-                                    originalRotation[0],
-                                    originalRotation[1],
-                                    originalRotation[2]
-                                );
-                                this.groupRef.current.position.set(0, 0, 0);
-                            }
+                    <div className="editor-control-container">
+                        <div className="editor-buttons">
+                            <div className="view-options-label">View Options: </div>
+                            <Button className="editor-button" onClick={() => spinning = true} variant="outlined">
+                                <AutorenewIcon/>
+                            </Button>
+                            <Button className="editor-button" onClick={() => spinning = false} variant="outlined">
+                                <DangerousIcon/>
+                            </Button>
+                            <Button className="editor-button" onClick={() => {
+                                if(this.groupRef){
+                                    this.groupRef.current.rotation.set(
+                                        originalRotation[0],
+                                        originalRotation[1],
+                                        originalRotation[2]
+                                    );
+                                    this.groupRef.current.position.set(0, 0, 0);
+                                }
 
-                            if(this.controlsRef.current !== undefined){
-                                const controls = this.controlsRef.current;
-                                controls.reset();
-                                controls.target.set(...lookPos);
-                            }
-                        }} variant="outlined">
-                            <HomeIcon/>
-                        </Button>
+                                if(this.controlsRef.current !== undefined){
+                                    const controls = this.controlsRef.current;
+                                    controls.reset();
+                                    controls.target.set(...lookPos);
+                                }
+                            }} variant="outlined">
+                                <HomeIcon/>
+                            </Button>
+                        </div>
+
+                        <div className="sub-sub-row">
+                        <div className='wrap-40'>
+                            <div><AutorenewIcon className="padAround-inline"/> = Start Spinning</div>
+                            <div><DangerousIcon className="padLeft-inline"/> = Stop Spinning</div>
+                            <div><HomeIcon className="padLeft-inline"/> = Reset View</div>
+                        </div>
+                        </div>
                     </div>
 
-                    <Button className="download-button" variant="outlined" onClick={this.generate3DModel}>Download!</Button>
-                </div>
-
-                <div className="sub-sub-row">
-                    <div className='wrap-40'>
-                        <div><AutorenewIcon className="padAround-inline"/> = Start Spinning</div>
-                        <div><DangerousIcon className="padLeft-inline"/> = Stop Spinning</div>
-                        <div><HomeIcon className="padLeft-inline"/> = Reset View</div>
+                    <div className="download-container">
+                        <Button className="download-button" variant="outlined" onClick={() => this.generate3DModel(false)}>Download STL</Button>
+                        <Button className="download-button" variant="outlined" onClick={() => this.generate3DModel(true)}>Download X3G</Button>
+                        <div 
+                            className="slicing-status-label"
+                            style={{ 
+                                color: this.state.ready_to_slice ? 'green' : 'red',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            {this.state.ready_to_slice ? 'Ready to slice!' : 'Waiting on server...'}
+                        </div>
                     </div>
+
                 </div>
 
                 <br></br>
                 <br></br>
                 <div className="sub-row">
-                    Copyright &copy;2023 Toysinbox 3D Printing.
+                    Copyright &copy;2025 Toysinbox 3D Printing. Powered by Asunder Labs.
                 </div>
             </div>
         );
     }
+}
+
+let scheduler_shared_counter = 0;
+let scheduler: {
+    [key: string]: () => void
+} = {};
+let error_scheduler: {
+    [key: string]: (reason?: any) => void
+} = {};
+let websocket: WebSocket;
+
+let rest_server: string;
+let websocket_server: string;
+let do_logging: boolean = true;
+
+async function login (
+    credentials: ToysinboxLoginCredentials, 
+    _do_logging = true,
+    update_react_state_callback: any
+) {
+    do_logging = _do_logging;
+    rest_server = credentials.rest_server;
+    websocket_server = credentials.websocket_server;
+
+    // intermittently clear out scheduler cache
+    setInterval(() => {
+        if(scheduler_shared_counter <= 0){
+            scheduler = {};
+            error_scheduler = {};
+            scheduler_shared_counter = 0;
+        }
+    }, 1000);
+
+    // complete rest of async login process
+    return new Promise<boolean>((resolve, reject) => {
+        websocket = new WebSocket(websocket_server);
+        websocket.addEventListener('open', () => {
+            if(do_logging) console.log('opened websocket server');
+            update_react_state_callback();
+            resolve(true);
+        });
+        websocket.addEventListener('error', (e) => {
+            if(do_logging) console.log('websocket error', e);
+            resolve(false);
+        });
+        websocket.addEventListener('message', (e) => {
+            // on update from server, get file
+            const data: ServerRequestStatus = JSON.parse(e.data.toString());
+            if(!data.event || !data.uuid) {
+                if(do_logging) console.log('(500) Malformed response from server');
+                if(data.uuid) error_scheduler[data.uuid]('(500) Malformed response from server');
+                return;
+            }
+            
+            // received successful response
+            if(data.event === 'server_finished_processing'){
+                if(do_logging) console.log("Received finished update, will send GET request!");
+                scheduler[data.uuid]();
+            } 
+
+            // received failed response
+            else if(data.event === 'server_failed_processing'){
+                if(do_logging) console.error("(500) Server failed processing file");
+                error_scheduler[data.uuid]('(500) Server failed processing file, ' + data.description);
+            }
+        });
+    });
+}
+
+const POST_file = async (
+    route: string,
+    file: File,
+    config: any, 
+) => {
+    return new Promise<string>((resolve, reject) => {
+        if(do_logging) console.log('Sending POST request...');
+
+        // get parameter JSON file
+        const json_file = new File(
+            [JSON.stringify(config)], 
+            'params.json', 
+            {
+                type: 'text/plain',
+                lastModified: new Date().getTime(),
+            }
+        );
+
+        // get OBJ 3D model file 
+        const model_file = file;
+
+        // put files into a FormData to send to the server
+        // this is achieved via multipart/form-data in request
+        const files = [json_file, model_file];
+        const data = new FormData();
+        for (const file of files) {
+            data.append('files[]', file, file.name);
+        }
+
+        // send the files to the server in a POST request
+        console.log(`${rest_server}/${route}`);
+        fetch(`${rest_server}/${route}`, {
+            method: "POST", 
+            headers: {               
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            },
+            body: data
+        }).then(async (res) =>  {
+            if(res.status !== 200){
+                const text = await res.text();
+                reject(`POST request error (${res.status}): ${text}`);
+                return;
+            }
+
+            if(do_logging) console.log("POST request complete");
+            const data = await res.json();
+            websocket.send(JSON.stringify({
+                event: 'client_received_uuid',
+                uuid: data.uuid
+            }));
+            resolve(data.uuid);
+
+        }).catch((err) => {
+            if(do_logging) console.log("POST request error", err);
+            reject('POST request error');
+        });
+    });
+}
+
+const GET_file = async (
+    uuid: string,
+    file_name: any
+) => {
+    return new Promise<File>((resolve, reject) => {
+        if(do_logging) console.log('Sending GET request...');
+
+        fetch(`${rest_server}/fetch-result`, {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                uuid: uuid,
+            } as ClientRequestResult)
+        }).then(async (res) => {
+            if(res.status !== 200){
+                const text = await res.text();
+                reject(`GET request error (${res.status}): ${text}`);
+                return;
+            }
+
+            if(do_logging) console.log("GET request complete");
+            const data_blob = await res.blob();
+            const formatted_file_name = `${file_name}`;
+            const output_file = new File([data_blob], formatted_file_name);
+            resolve(output_file);
+        }).catch((err) => {
+            if(do_logging) console.error("GET request error", err);
+            reject('GET request error');
+        });
+    });
+}
+
+async function convert (
+    config: TaskConvertConfig, 
+    file: File
+) {
+    if(do_logging) console.log('Starting converting process...', file);
+
+    return new Promise<File>((resolve, reject) => {
+        if(!file || !file.name){
+            reject('invalid file');
+            return;
+        }
+        const file_name = file.name.split('.').slice(0, -1).join('') + `.${config.target_format}`;
+ 
+        scheduler_shared_counter += 1;
+
+        // 1. Send file and config to the server
+        POST_file('cloud-convert/file-upload', file, config)
+            .then((file_uuid) => {
+                // 2. Upon confirmation, wait for signal to get it from server
+                scheduler[file_uuid] = async () => {
+                    GET_file(file_uuid, file_name)
+                        .then((file) => resolve(file))
+                        .catch((reason) => reject(reason))
+                        .finally(() => scheduler_shared_counter -= 1)
+                }
+                error_scheduler[file_uuid] = (reason: any) => {
+                    reject(reason);
+                    scheduler_shared_counter -= 1;
+                }
+            })
+            .catch((reason) => {
+                reject(reason);
+                scheduler_shared_counter -= 1;
+            });
+    });
+}
+
+async function slice (
+    config: TaskSliceConfig, 
+    file: File
+) {
+    if(do_logging) console.log('Starting slicing process...', file);
+
+    return new Promise<File>((resolve, reject) => {
+        if(!file || !file.name){
+            reject('invalid file');
+            return;
+        }
+        const file_name = file.name.split('.').slice(0, -1).join('') + `.x3g`;
+ 
+        scheduler_shared_counter += 1;
+
+        // 1. Send file and config to the server
+        POST_file('cloud-slice/file-upload', file, config)
+            .then((file_uuid) => {
+                // 2. Upon confirmation, wait for signal to get it from server
+                scheduler[file_uuid] = async () => {
+                    GET_file(file_uuid, file_name)
+                        .then((file) => resolve(file))
+                        .catch((reason) => reject(reason))
+                        .finally(() => scheduler_shared_counter -= 1)
+                }
+                error_scheduler[file_uuid] = (reason: any) => {
+                    reject(reason);
+                    scheduler_shared_counter -= 1;
+                }
+            })
+            .catch((reason) => {
+                reject(reason);
+                scheduler_shared_counter -= 1;
+            });
+    });
 }

@@ -1,4 +1,4 @@
-const newPath = 'scottsboro-library';
+const newPath = 'client';
 
 const fs = require('fs');
 const childProcess = require('child_process')

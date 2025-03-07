@@ -1,7 +1,7 @@
 {
     "name": "3d-keychain-modeler",
     "version": "0.1.0",
-    "homepage": "/hellomunchkins/scottsboro-library/",
+    "homepage": "/hellomunchkins/client/",
     "private": true,
     "dependencies": {
         "@emotion/react": "^11.11.1",
@@ -32,7 +32,7 @@
         "react-scripts": "5.0.1",
         "rimraf": "^5.0.1",
         "styled-components": "^6.0.3",
-        "three": "^0.153.0",
+        "three": "^0.159.0",
         "typescript": "^4.9.5",
         "web-vitals": "^2.1.4"
     },
