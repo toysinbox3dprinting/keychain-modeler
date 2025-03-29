@@ -1,9 +1,9 @@
-import React, { Ref, useEffect, useRef, useState } from "react";
+import React from "react";
 import { ReactNode } from "react";
 import './homepage.css';
 
 import * as THREE from 'three';
-import { Canvas, RootState, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { createBox } from "../kernel/createBox";
 import { Point, Polyhedron } from "../lib/geometry";
 import { CSGToData } from "../lib/CSGToData";
@@ -15,9 +15,8 @@ import { createText } from "../kernel/createText";
 import BebasFont from '../resources/BebasNeue.otf';
 import EmojiFont from '../kernel/fonts/NotoEmoji-Regular.ttf';
 import Accordion from "@mui/material/Accordion";
-import { AccordionSummary, Typography, AccordionDetails, TextField, Button, Container } from "@mui/material";
+import { AccordionSummary, AccordionDetails, TextField, Button } from "@mui/material";
 import { ArrowForwardIosSharp } from "@mui/icons-material";
-import ThreeSixtyIcon from '@mui/icons-material/ThreeSixty';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import DangerousIcon from '@mui/icons-material/Dangerous';
 import HomeIcon from '@mui/icons-material/Home';
@@ -27,13 +26,19 @@ import LogoImage from '../resources/logo_transparent.png';
 import { EmojiSelector } from "./emojiselector";
 import { createSVG } from "../kernel/createSVG";
 import { ToysinboxLoginCredentials, ServerRequestStatus, ClientRequestResult, TaskConvertConfig, TaskSliceConfig } from "./shared_types";
+import { log } from "console";
 
 let spinning = true;
-let groupRef: any = undefined;
 let originalRotation : number[] = [0, 0, 0];
 
 const startPos: [number, number, number] = [25, 65, 25];
 const lookPos: [number, number, number] = [25, 10, 0];
+
+const login_credentials = {
+    token: '',
+    rest_server: `https://slicing-www.asunder.co`,
+    websocket_server: `wss://slicing-wss.asunder.co`
+};
 
 function Update(props: {thisRef: HomePage}){
     useFrame((state, delta, xrFrame) => {
@@ -122,11 +127,7 @@ export class HomePage extends React.Component<{}, HomePageState> {
         this.generate3DModel = this.generate3DModel.bind(this);
 
         login(
-            {
-                token: '',
-                rest_server: `https://asunder.app`,
-                websocket_server: `wss://wss.asunder.app`
-            }, 
+            login_credentials, 
             false, 
             () => {
                 this.setState({ready_to_slice: true});
@@ -283,8 +284,6 @@ export class HomePage extends React.Component<{}, HomePageState> {
     }
 
     async download_x3g(obj_data: string){
-        console.log(obj_data);
-
         const obj_file = new File(
             [obj_data], 
             'model.obj', 
@@ -293,12 +292,8 @@ export class HomePage extends React.Component<{}, HomePageState> {
                 lastModified: new Date().getTime(),
             }
         );
-        // this.download('model.obj', obj_file);
 
         const stl_file = await convert({ input_format: 'obj', target_format: 'stl' }, obj_file);
-
-        // this.download('model.stl', stl_file);
-
         const x3g_file = await slice({ input_format: 'stl', layer_height: 0.2 }, stl_file);
         this.download(`keychain-${this.state.text}-${this.state.shape}.x3g`, x3g_file);
     }
@@ -365,8 +360,6 @@ export class HomePage extends React.Component<{}, HomePageState> {
                     16, 2, 3
                 );
                 top = correctedText.union(emoji);
-                console.log(correctedText, emoji);
-                console.log(top)
             } else {
                 top = correctedText;
             }
@@ -393,7 +386,7 @@ ${data.vertices.map(v => `v ${v[0]} ${v[1]} ${v[2]} 10.0`).join('\r\n')}
 ${data.indices.map(i => `f ${i[0] + 1} ${i[1] + 1} ${i[2] + 1}`).join('\r\n')}`
 
             const lines = obj_file_contents.split('\n').map(line => {
-                if(line.slice(0, 1) != 'v'){
+                if(line.slice(0, 1) !== 'v'){
                     return line;
                 } else {
                     // v -14.470452261306537 157.8768715083799 70 0.0
@@ -478,8 +471,6 @@ ${data.indices.map(i => `f ${i[0] + 1} ${i[1] + 1} ${i[2] + 1}`).join('\r\n')}`
     }
 
     render(): ReactNode {
-        console.log("RERENDER TIME");
-
         const handleChange = (panel: string) => 
             (event: React.SyntheticEvent, newExpanded: boolean) => 
                 this.setState({selectedPanel: newExpanded ? panel : false});
@@ -703,6 +694,13 @@ async function login (
                 if(do_logging) console.error("(500) Server failed processing file");
                 error_scheduler[data.uuid]('(500) Server failed processing file, ' + data.description);
             }
+        });
+
+        websocket.addEventListener('close', (e) => {
+            console.log("LOST CONNECTION, logging back in...")
+            setTimeout(() => {
+                login(credentials, do_logging, update_react_state_callback);
+            }, 100);
         });
     });
 }
