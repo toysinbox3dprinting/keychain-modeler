@@ -1,5 +1,5 @@
 import React from "react";
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import './homepage.css';
 
 import * as THREE from 'three';
@@ -27,7 +27,6 @@ import LogoImage from '../resources/logo_transparent.png';
 import { EmojiSelector } from "./emojiselector";
 import { createSVG } from "../kernel/createSVG";
 import { ToysinboxLoginCredentials, ServerRequestStatus, ClientRequestResult, TaskConvertConfig, TaskSliceConfig } from "./shared_types";
-import { log } from "console";
 
 let spinning = true;
 let originalRotation : number[] = [0, 0, 0];
@@ -79,7 +78,19 @@ export interface HomePageState {
 
 const CameraSelector = ({ cameraType }: { cameraType: 'perspective' | 'orthographic' }) => {
     const { viewport } = useThree();
+    const orthoRef = useRef<any>();
     const frustumSize = 100;
+    
+    useFrame(() => {
+        if (cameraType === 'orthographic' && orthoRef.current) {
+            const camera = orthoRef.current;
+            camera.left = -frustumSize * viewport.aspect / 2;
+            camera.right = frustumSize * viewport.aspect / 2;
+            camera.top = frustumSize / 2;
+            camera.bottom = -frustumSize / 2;
+            camera.updateProjectionMatrix();
+        }
+    });
     
     if (cameraType === 'perspective') {
         return (
@@ -94,6 +105,7 @@ const CameraSelector = ({ cameraType }: { cameraType: 'perspective' | 'orthograp
     } else {
         return (
             <OrthographicCamera
+                ref={orthoRef}
                 makeDefault
                 position={startPos}
                 near={0.1}
