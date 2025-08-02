@@ -171,6 +171,21 @@ body::-webkit-scrollbar{
     padding-right: 3rem !important;
 }
 
+.download-button-model {
+    width: 7.5rem;
+    background-color: white !important;
+
+    font-family: 'Bebas' !important;
+    font-size: 2rem !important;
+
+    margin-right: 0px !important;
+    margin-left: auto !important;
+    margin-bottom: 1rem !important;
+
+    padding-left: 3rem !important;
+    padding-right: 3rem !important;
+}
+
 .slicing-status-label {
     margin-top: -0.5rem;
 }
@@ -185,6 +200,7 @@ body::-webkit-scrollbar{
     width: 70%;
     display: flex;
     flex-wrap: wrap;
+    flex-direction: column;
     margin-left: -7px;
 }
 

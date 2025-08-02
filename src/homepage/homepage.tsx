@@ -3,7 +3,8 @@ import { ReactNode } from "react";
 import './homepage.css';
 
 import * as THREE from 'three';
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { PerspectiveCamera, OrthographicCamera } from '@react-three/drei';
 import { createBox } from "../kernel/createBox";
 import { Point, Polyhedron } from "../lib/geometry";
 import { CSGToData } from "../lib/CSGToData";
@@ -16,7 +17,7 @@ import BebasFont from '../resources/BebasNeue.otf';
 import EmojiFont from '../kernel/fonts/NotoEmoji-Regular.ttf';
 import Accordion from "@mui/material/Accordion";
 import { AccordionSummary, AccordionDetails, TextField, Button } from "@mui/material";
-import { ArrowForwardIosSharp } from "@mui/icons-material";
+import { ArrowForwardIosSharp, Widgets } from "@mui/icons-material";
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import DangerousIcon from '@mui/icons-material/Dangerous';
 import HomeIcon from '@mui/icons-material/Home';
@@ -73,7 +74,39 @@ export interface HomePageState {
     baseMaterial: THREE.MeshBasicMaterial;
 
     ready_to_slice: boolean;
+    camera_type: 'perspective' | 'orthographic';
 }
+
+const CameraSelector = ({ cameraType }: { cameraType: 'perspective' | 'orthographic' }) => {
+    const { viewport } = useThree();
+    const frustumSize = 100;
+    
+    if (cameraType === 'perspective') {
+        return (
+            <PerspectiveCamera
+                makeDefault
+                position={startPos}
+                near={0.1}
+                far={1000}
+                fov={75}
+            />
+        );
+    } else {
+        return (
+            <OrthographicCamera
+                makeDefault
+                position={startPos}
+                near={0.1}
+                far={1000}
+                left={-frustumSize * viewport.aspect / 2}
+                right={frustumSize * viewport.aspect / 2}
+                top={frustumSize / 2}
+                bottom={-frustumSize / 2}
+                zoom={1}
+            />
+        );
+    }
+};
 
 export class HomePage extends React.Component<{}, HomePageState> {
     editorViewportWidth: number;
@@ -113,7 +146,8 @@ export class HomePage extends React.Component<{}, HomePageState> {
             baseGeometry: new THREE.BufferGeometry(),
             baseMaterial: new THREE.MeshBasicMaterial(),
 
-            ready_to_slice: false
+            ready_to_slice: false,
+            camera_type: 'perspective'
         };
 
         this.groupRef = React.createRef();
@@ -298,7 +332,33 @@ export class HomePage extends React.Component<{}, HomePageState> {
         this.download(`keychain-${this.state.text}-${this.state.shape}.x3g`, x3g_file);
     }
 
-    generate3DModel(slice = false){
+    async download_stl(obj_data: string){
+        const obj_file = new File(
+            [obj_data], 
+            'model.obj', 
+            {
+                type: 'text/plain',
+                lastModified: new Date().getTime(),
+            }
+        );
+
+        const stl_file = await convert({ input_format: 'obj', target_format: 'stl' }, obj_file);
+        this.download(`keychain-${this.state.text}-${this.state.shape}.stl`, stl_file);
+    }
+
+    async download_obj(obj_data: string){
+        const obj_file = new File(
+            [obj_data], 
+            'model.obj', 
+            {
+                type: 'text/plain',
+                lastModified: new Date().getTime(),
+            }
+        );
+        this.download(`keychain-${this.state.text}-${this.state.shape}.obj`, obj_file);
+    }
+
+    generate3DModel(slice = false, format = 'stl'){
         createText(this.state.text, BebasFont, 5, 2, 16).then(async (text) => {
             const correctedText = text //.flipY();
 
@@ -402,7 +462,12 @@ ${data.indices.map(i => `f ${i[0] + 1} ${i[1] + 1} ${i[2] + 1}`).join('\r\n')}`
             const rescaled_obj_file_contents = lines.join('\n');
 
             if(!slice){
-                this.download(obj_file_name, rescaled_obj_file_contents);
+                // this.download(obj_file_name, rescaled_obj_file_contents);
+                if(format === 'stl'){
+                    this.download_stl(rescaled_obj_file_contents);
+                } else {
+                    this.download_obj(rescaled_obj_file_contents);
+                }
             } else {
                 this.download_x3g(rescaled_obj_file_contents);
             }
@@ -486,20 +551,16 @@ ${data.indices.map(i => `f ${i[0] + 1} ${i[1] + 1} ${i[2] + 1}`).join('\r\n')}`
 
                 <div className="main-row">
                     <div className="main-canvas">
-                        <Canvas
-                            camera={{ 
-                                near: 0.1,
-                                far: 1000,
-                                position: startPos
-                            }}>
-
+                        <Canvas>
+                            <CameraSelector cameraType={this.state.camera_type} />
+                            
                             <group ref={this.groupRef}>
                                 {this.keychainText()}
                                 {this.keychainBase()}
 
                                 <ambientLight />
                                 <pointLight position={[35, 10, 20]} />
-                                <axesHelper args={[100]}/>
+                                {/* <axesHelper args={[100]}/> */}
                             </group>
 
                             <OrbitControls position={startPos} target={lookPos} ref={this.controlsRef}/>
@@ -589,11 +650,53 @@ ${data.indices.map(i => `f ${i[0] + 1} ${i[1] + 1} ${i[2] + 1}`).join('\r\n')}`
                                 if(this.controlsRef.current !== undefined){
                                     const controls = this.controlsRef.current;
                                     controls.reset();
-                                    controls.target.set(...lookPos);
+                                    
+                                    if(this.state.camera_type === 'orthographic') {
+                                        controls.target.set(25, 0, 5);
+                                        controls.object.position.set(25, 100, 5);
+                                    } else {
+                                        controls.target.set(...lookPos);
+                                        controls.object.position.set(...startPos);
+                                    }
                                 }
                             }} variant="outlined">
                                 <HomeIcon/>
                             </Button>
+                            { this.state.camera_type === 'perspective' ?
+                                <Button className="editor-button" onClick={() => {
+                                    this.setState({
+                                        camera_type: 'orthographic',
+                                    });
+                                    spinning = false;
+
+                                    setTimeout(() => {
+                                        if(this.groupRef){
+                                            this.groupRef.current.rotation.set(
+                                                originalRotation[0],
+                                                originalRotation[1],
+                                                originalRotation[2]
+                                            );
+                                            this.groupRef.current.position.set(0, 0, 0);
+                                        }
+                                        if(this.controlsRef.current !== undefined){
+                                            const controls = this.controlsRef.current;
+                                            controls.reset();
+                                            controls.target.set(25, 0, 5);
+                                            controls.object.position.set(25, 100, 5);
+                                            controls.update();
+                                        }
+                                    }, 50);
+
+
+                                }} variant="outlined">
+                                    <b>P</b>
+                                </Button> :
+                                <Button className="editor-button" onClick={() => {
+                                    this.setState({camera_type: 'perspective'});
+                                }} variant="outlined">
+                                    <b>O</b>
+                                </Button>
+                            }
                         </div>
 
                         <div className="sub-sub-row">
@@ -601,13 +704,38 @@ ${data.indices.map(i => `f ${i[0] + 1} ${i[1] + 1} ${i[2] + 1}`).join('\r\n')}`
                             <div><AutorenewIcon className="padAround-inline"/> = Start Spinning</div>
                             <div><DangerousIcon className="padLeft-inline"/> = Stop Spinning</div>
                             <div><HomeIcon className="padLeft-inline"/> = Reset View</div>
+                            <div style={{
+                                width: 'fit-content',
+                                whiteSpace: 'nowrap',
+                            }}><b>P / O</b> = Perspective / Orthographic View</div>
                         </div>
                         </div>
                     </div>
 
                     <div className="download-container">
-                        <Button className="download-button" variant="outlined" onClick={() => this.generate3DModel(false)}>Download STL</Button>
+                        
                         <Button className="download-button" variant="outlined" onClick={() => this.generate3DModel(true)}>Download X3G</Button>
+                        
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'row',
+                        }}>
+                            <Button 
+                                className="download-button-model"
+                                variant="outlined" 
+                                onClick={() => this.generate3DModel(false, 'stl')}>
+                                STL
+                            </Button>
+                            <div style={{
+                                width: '1rem'
+                            }}></div>
+                            <Button 
+                                className="download-button-model"
+                                variant="outlined" 
+                                onClick={() => this.generate3DModel(false, 'obj')}>
+                                OBJ
+                            </Button>
+                        </div>
                         <div 
                             className="slicing-status-label"
                             style={{ 
