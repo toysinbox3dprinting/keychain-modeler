@@ -1,1 +1,2 @@
-src/lib/csg/*
+src/core/vendor/csg/**
+src/core/geometry/earcut.esm.js

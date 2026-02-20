@@ -1,46 +1,55 @@
-# Getting Started with Create React App
+# Keychain Modeler
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Web-based 3D keychain designer for generating OBJ/STL/X3G outputs.
 
-## Available Scripts
+## What this repo contains
+- `src/ui/`: React UI pages, editor components, styles, and UI assets/fonts.
+- `src/core/`: modeling logic, geometry primitives/adapters, and vendored CSG.
+- `src/infra/`: external integrations (slicing/convert API client and config).
+- `src/app/`: app bootstrap, router, and app-level config.
+- `scripts/`: build and artifact packaging scripts.
+- `docs/`: architecture and build-target documentation.
 
-In the project directory, you can run:
+## Development
+- `npm run dev`: run local Vite development server.
+- `npm start`: alias of `npm run dev`.
+- `npm test`: run test runner.
+- `npm run typecheck`: run TypeScript checks.
+- `npm run lint`: run lint checks.
+- `npm run generate:adapters`: regenerate ESM adapter bundles for vendored CSG/earcut.
+- `npm run verify:adapters`: fail if committed adapter bundles are stale.
 
-### `npm start`
+## Build targets
+- `npm run build:web`
+  - Standard web build to `build/`.
+- `npm run build:prod`
+  - Production web build with deploy config.
+  - Reads `APP_BASE_PATH` (or `REACT_APP_BASE_PATH`) for router/public path.
+- `npm run build:artifact`
+  - Produces deploy artifact (`client.zip`) from production output.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## Environment variables
+- `APP_BASE_PATH` or `REACT_APP_BASE_PATH` (example: `/hellomunchkins/client`)
+- `REACT_APP_ENABLE_BASE_PATH_IN_DEV=true` (optional; keeps base path enabled during local dev)
+- `REACT_APP_API_BASE_URL` (default: `https://slicing-www.asunder.co`)
+- `REACT_APP_WS_BASE_URL` (default: `wss://slicing-wss.asunder.co`)
+- `BUILD_ARTIFACT_NAME` (default: `client.zip`)
+- `BUILD_ARTIFACT_DIR_NAME` (default: `client`)
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Example production build
+```bash
+APP_BASE_PATH=/hellomunchkins/client npm run build:prod
+APP_BASE_PATH=/hellomunchkins/client npm run build:artifact
+```
 
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Adapter bundles
+- Runtime imports `src/core/vendor/csg/dist/*.esm.js` and `src/core/geometry/earcut.esm.js`.
+- These are generated from:
+  - `src/core/vendor/csg/api.js`
+  - `src/core/vendor/csg/csg.js`
+  - `src/core/geometry/earcut.js`
+- Regenerate after changes to those source files:
+```bash
+npm run generate:adapters
+npm run verify:adapters
+```
