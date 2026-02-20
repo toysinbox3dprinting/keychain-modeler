@@ -15,11 +15,12 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const configuredBasePath = normalizeBasePath(env.REACT_APP_BASE_PATH || env.APP_BASE_PATH || '/');
   const useBaseInDev = env.REACT_APP_ENABLE_BASE_PATH_IN_DEV === 'true';
+  const isElectronDesktopBuild = process.env.ELECTRON_DESKTOP === 'true';
 
   return {
     plugins: [react(), tsconfigPaths()],
     envPrefix: ['VITE_', 'REACT_APP_', 'APP_'],
-    base: command === 'serve' && !useBaseInDev ? '/' : configuredBasePath,
+    base: isElectronDesktopBuild ? './' : (command === 'serve' && !useBaseInDev ? '/' : configuredBasePath),
     build: {
       outDir: 'build',
       emptyOutDir: true,

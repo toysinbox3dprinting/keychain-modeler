@@ -1,9 +1,10 @@
 Legacy manual build steps are deprecated.
 
 Use the scripted workflow:
-1) npm run build:web
-2) APP_BASE_PATH=/your/subpath npm run build:prod
-3) APP_BASE_PATH=/your/subpath npm run build:artifact
+1) npm ci
+2) npm run build:web
+3) APP_BASE_PATH=/your/subpath npm run build:prod
+4) APP_BASE_PATH=/your/subpath npm run build:artifact
 
 Notes:
 - Base path is driven by REACT_APP_BASE_PATH / APP_BASE_PATH.
@@ -13,3 +14,11 @@ Notes:
 - Geometry adapter bundles are generated/checked with:
   - npm run generate:adapters
   - npm run verify:adapters
+- Desktop build/package commands:
+  - npm run build:desktop
+  - npm run pack:desktop:macos
+  - npm run pack:desktop:windows
+  - npm run build:desktop:macos
+  - npm run build:desktop:windows
+  - Packaging is explicit by target OS (no auto-detect desktop package command).
+  - Desktop artifacts are unsigned by default; signing/notarization must be added in release automation.

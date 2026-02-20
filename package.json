@@ -1,6 +1,9 @@
 {
     "name": "3d-keychain-modeler",
     "version": "0.1.0",
+    "description": "3D keychain designer for web and Electron desktop exports.",
+    "author": "Toysinbox 3D Printing",
+    "main": "dist-electron/main.js",
     "homepage": "/",
     "private": true,
     "dependencies": {
@@ -30,14 +33,26 @@
     },
     "scripts": {
         "start": "vite",
+        "dev:web": "vite",
         "build": "npm run build:web",
         "test": "vitest run --passWithNoTests",
         "build:web": "node ./scripts/build-web.js",
+        "build:desktop:renderer": "node ./scripts/build-desktop-renderer.js",
+        "desktop:main:build": "node ./scripts/build-electron-main.js",
+        "desktop:main:watch": "node ./scripts/build-electron-main.js --watch",
+        "desktop:electron": "wait-on tcp:5173 file:dist-electron/main.js && nodemon --watch dist-electron --ext js --exec \"electron dist-electron/main.js\"",
+        "dev:desktop": "concurrently -k -n renderer,main,electron -c cyan,magenta,green \"npm:dev:web\" \"npm:desktop:main:watch\" \"npm:desktop:electron\"",
+        "build:desktop": "npm run build:desktop:renderer && npm run desktop:main:build",
+        "pack:desktop:macos": "npm run build:desktop && electron-builder --dir --mac --publish never",
+        "pack:desktop:windows": "npm run build:desktop && electron-builder --dir --win --publish never",
+        "build:desktop:macos": "npm run build:desktop && electron-builder --mac --publish never",
+        "build:desktop:windows": "npm run build:desktop && electron-builder --win --publish never",
         "build:prod": "node ./scripts/build-prod.js",
         "build:artifact": "node ./scripts/build-artifact.js",
         "generate:adapters": "node ./scripts/generate-geometry-adapters.js",
         "verify:adapters": "node ./scripts/verify-geometry-adapters.js",
         "typecheck": "tsc --noEmit",
+        "typecheck:desktop": "tsc --noEmit -p electron/tsconfig.json",
         "dev": "vite",
         "preview": "vite preview",
         "lint": "eslint \"src/**/*.{ts,tsx,js,jsx}\" --max-warnings=0"
@@ -104,12 +119,17 @@
     },
     "devDependencies": {
         "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+        "concurrently": "^9.1.2",
+        "electron": "^33.2.1",
+        "electron-builder": "^25.1.8",
         "esbuild": "^0.25.0",
         "eslint": "^8.57.1",
         "eslint-config-react-app": "^7.0.1",
+        "nodemon": "^3.1.9",
         "vite": "^5.4.14",
         "@vitejs/plugin-react": "^4.3.4",
         "vite-tsconfig-paths": "^5.1.4",
-        "vitest": "^2.1.8"
+        "vitest": "^2.1.8",
+        "wait-on": "^8.0.1"
     }
 }

@@ -11,3 +11,14 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+interface Window {
+  desktop?: {
+    saveFile(request: {
+      defaultName: string;
+      filters: Array<{ name: string; extensions: string[] }>;
+      contentBase64: string;
+    }): Promise<{ canceled: boolean; path?: string }>;
+    getAppInfo(): Promise<{ version: string; platform: string }>;
+  };
+}

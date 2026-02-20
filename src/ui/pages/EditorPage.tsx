@@ -19,6 +19,7 @@ import { EditorControls } from '../components/editor/EditorControls';
 import { EditorPanels } from '../components/editor/EditorPanels';
 import { SceneViewport } from '../components/editor/SceneViewport';
 import { EditorPageState, PanelId } from '../state/editorTypes';
+import { saveFileWithDesktop } from '@infra/desktop/desktopApi';
 
 export class EditorPage extends React.Component<{}, EditorPageState> {
     private readonly controller: EditorController;
@@ -75,15 +76,25 @@ export class EditorPage extends React.Component<{}, EditorPageState> {
         this.controller.disconnect();
     }
 
-    private download(filename: string, data: string | File) {
+    private async download(filename: string, data: string | File): Promise<void> {
+        const desktopSaveResult = await saveFileWithDesktop(filename, data);
+        if (desktopSaveResult !== undefined) {
+            return;
+        }
+
         const blob = typeof data === 'string' ? new Blob([data], { type: 'text/plain' }) : data;
+        const objectUrl = window.URL.createObjectURL(blob);
 
         const elem = window.document.createElement('a');
-        elem.href = window.URL.createObjectURL(blob);
+        elem.href = objectUrl;
         elem.download = filename;
         document.body.appendChild(elem);
-        elem.click();
-        document.body.removeChild(elem);
+        try {
+            elem.click();
+        } finally {
+            document.body.removeChild(elem);
+            window.URL.revokeObjectURL(objectUrl);
+        }
     }
 
     private getDownloadFilename(extension: 'obj' | 'stl' | 'x3g'): string {
@@ -93,19 +104,19 @@ export class EditorPage extends React.Component<{}, EditorPageState> {
     private async downloadX3g() {
         const objData = await this.controller.buildObjContents(this.state.text, this.state.shape);
         const x3gFile = await this.controller.convertObjToX3g(objData);
-        this.download(this.getDownloadFilename('x3g'), x3gFile);
+        await this.download(this.getDownloadFilename('x3g'), x3gFile);
     }
 
     private async downloadStl() {
         const objData = await this.controller.buildObjContents(this.state.text, this.state.shape);
         const stlFile = await this.controller.convertObjToStl(objData);
-        this.download(this.getDownloadFilename('stl'), stlFile);
+        await this.download(this.getDownloadFilename('stl'), stlFile);
     }
 
     private async downloadObj() {
         const objData = await this.controller.buildObjContents(this.state.text, this.state.shape);
         const objFile = this.controller.createObjFile(objData);
-        this.download(this.getDownloadFilename('obj'), objFile);
+        await this.download(this.getDownloadFilename('obj'), objFile);
     }
 
     private async generate3DModel(slice = false, format: ExportFormat = 'stl') {

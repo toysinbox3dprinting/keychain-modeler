@@ -1,0 +1,26 @@
+appId: com.toysinbox.keychainmodeler
+productName: Keychain Modeler
+asar: true
+
+directories:
+  output: release
+
+files:
+  - build/**/*
+  - dist-electron/**/*
+  - package.json
+
+mac:
+  category: public.app-category.graphics-design
+  target:
+    - dmg
+    - zip
+
+win:
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
