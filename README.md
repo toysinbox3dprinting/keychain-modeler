@@ -71,6 +71,9 @@ npm run generate:adapters
 npm run verify:adapters
 ```
 
+## OBJ compatibility
+- OBJ export intentionally writes homogeneous vertex `w` as `1` to preserve legacy slicer/X3G output behavior.
+
 ## Electron
 - Electron sources live in `electron/` (`main.ts`, `preload.ts`, `ipc/*`).
 - Renderer remains the existing Vite React app (`src/*`).

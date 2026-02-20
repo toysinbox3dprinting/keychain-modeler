@@ -15,7 +15,8 @@ export const serializeKeychainObj = (polyhedron: Polyhedron): string => {
         '# Toysinbox 3D Printing',
         'g keychain',
         '# Vertices',
-        ...vertices.map((vertex) => `v ${vertex[0]} ${vertex[1]} ${vertex[2]} 10.0`),
+        // Keep homogeneous coordinate at 1 for legacy slicer compatibility.
+        ...vertices.map((vertex) => `v ${vertex[0]} ${vertex[1]} ${vertex[2]} 1`),
         '',
         '# Faces',
         ...data.indices.map((face) => `f ${face[0] + 1} ${face[1] + 1} ${face[2] + 1}`),
