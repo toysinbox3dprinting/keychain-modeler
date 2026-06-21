@@ -16,6 +16,7 @@ export const createSVG = async (shape : string, fontfile : string, fontHeight : 
         shape === 'dolphin' ? '\u{1F42C}' :
         shape === 'bear' ? '\u{1F43B}' :
         shape === 'fish' ? '\u{1F420}' :
+        shape === 'dino' ? '\u{1F995}' :
 
         '�';
 
@@ -79,8 +80,12 @@ export const createSVG = async (shape : string, fontfile : string, fontHeight : 
         object.setSizeX(135 / 10);
         object.setSizeY(130 / 10);
         object.translate(445 / 10, 160 / 10, 50 / 10);
+    } else if(shape === 'dino'){
+        object.setSizeX(130 / 10);
+        object.setSizeY(130 / 10);
+        object.translate(440 / 10, 180 / 10, 50 / 10);
     }
-    
+
     else {
         // 120, 150, 440, 150
         object.setSizeX(130 / 10);

@@ -25,6 +25,12 @@ export default defineConfig(({ command, mode }) => {
       outDir: 'build',
       emptyOutDir: true,
       sourcemap: false,
+      // Never inline font files as data URIs: they are fetched at runtime by
+      // opentype.js (via XHR on the asset URL), which does not handle data: URIs.
+      // Small fonts (e.g. the single-glyph dino) would otherwise be inlined and
+      // fail to load in production while working in dev.
+      assetsInlineLimit: (filePath: string) =>
+        /\.(ttf|otf|woff2?)$/i.test(filePath) ? false : undefined,
     },
   };
 });

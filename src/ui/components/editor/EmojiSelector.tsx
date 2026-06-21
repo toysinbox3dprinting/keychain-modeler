@@ -16,8 +16,8 @@ export class EmojiSelector extends React.Component<{
         this.emojis = [
             'cat', 'dog', 'penguin', 'flower', 
             'star', 'heart', 'musicnote', 'fire', 
-            'football', 'bear', // 'dolphin', 
-            'fish', 'none',         
+            'football', 'bear', // 'dolphin',
+            'fish', 'dino', 'none',
         ];
     }
 
@@ -34,7 +34,8 @@ export class EmojiSelector extends React.Component<{
             shape === 'football' ? '\u{1F3C8}' :
             shape === 'dolphin' ? '\u{1F42C}' :
             shape === 'bear' ? '\u{1F43B}' :
-            shape === 'fish' ? '\u{1F420}' : 
+            shape === 'fish' ? '\u{1F420}' :
+            shape === 'dino' ? '\u{1F995}' :
             shape === 'none' ? 'NONE' : '�';
     }
 
@@ -44,7 +45,7 @@ export class EmojiSelector extends React.Component<{
                 this.emojis.map((emoji => {
                     return (<Button className={`emoji-block`} onClick={() => {
                         this.props.changeShape(emoji);
-                    }} key={`${emoji}-emoji`}><div className={`${emoji === 'none' ? 'bebas-font' : 'emoji-font'}`}>
+                    }} key={`${emoji}-emoji`}><div className={`${emoji === 'none' ? 'bebas-font' : emoji === 'dino' ? 'dino-font' : 'emoji-font'}`}>
                         {this.convert(emoji)}    
                     </div></Button>);
                 }))

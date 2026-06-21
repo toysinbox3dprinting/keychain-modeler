@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import BebasFont from '../assets/fonts/BebasNeue.otf';
 import EmojiFont from '../assets/fonts/NotoEmoji-Regular.ttf';
+import DinoFont from '../assets/fonts/KeychainDino.ttf';
 import {
     createKeychainModel,
     createPreviewBaseOutput,
@@ -39,6 +40,7 @@ export class EditorController {
             shape,
             textFontPath: BebasFont,
             emojiFontPath: EmojiFont,
+            dinoFontPath: DinoFont,
         });
 
         const indexArray = output.mesh.indices.flat();
@@ -73,6 +75,7 @@ export class EditorController {
             shape,
             textFontPath: BebasFont,
             emojiFontPath: EmojiFont,
+            dinoFontPath: DinoFont,
         });
 
         return serializeKeychainObj(keychainModel);

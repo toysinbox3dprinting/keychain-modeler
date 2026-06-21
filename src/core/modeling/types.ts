@@ -13,6 +13,7 @@ export type KeychainShape =
     | 'dolphin'
     | 'bear'
     | 'fish'
+    | 'dino'
     | 'none'
     | string;
 
@@ -23,6 +24,9 @@ export interface KeychainBuildInput {
     shape: KeychainShape;
     textFontPath: string;
     emojiFontPath: string;
+    // The default emoji font (Noto Emoji v1.05) has no sauropod (1F995) glyph, so the
+    // dino is rendered from a dedicated single-glyph font built from our own SVG.
+    dinoFontPath: string;
 }
 
 export interface KeychainTextOptions {
