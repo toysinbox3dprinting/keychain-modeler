@@ -12,6 +12,14 @@ type PendingRequest = {
     reject: (reason?: string) => void;
 };
 
+// The server's WebSocket completion notification can be lost when a job finishes
+// before our `client_received_uuid` subscription registers (a handshake race that
+// is more likely the faster the job is). To avoid hanging forever on a missed
+// event, we also poll /fetch-result as a fallback and time the whole wait out.
+const SLICING_POLL_INITIAL_DELAY_MS = 400;
+const SLICING_POLL_INTERVAL_MS = 800;
+const SLICING_TIMEOUT_MS = 120_000;
+
 export class SlicingClient {
     private websocket: WebSocket | null = null;
     private pendingRequests = new Map<string, PendingRequest>();
@@ -168,11 +176,66 @@ export class SlicingClient {
         const uuid = await this.postFile(route, file, config);
 
         return new Promise<File>((resolve, reject) => {
+            let settled = false;
+            let pollTimer: ReturnType<typeof setTimeout> | null = null;
+            let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+            const cleanup = (): void => {
+                this.pendingRequests.delete(uuid);
+                if (pollTimer) {
+                    clearTimeout(pollTimer);
+                }
+                if (timeoutTimer) {
+                    clearTimeout(timeoutTimer);
+                }
+            };
+
+            const settleResolve = (resultFile: File): void => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                cleanup();
+                resolve(resultFile);
+            };
+
+            const settleReject = (reason?: string): void => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                cleanup();
+                reject(reason);
+            };
+
+            // Fast path: the WebSocket completion event resolves/rejects via this entry.
             this.pendingRequests.set(uuid, {
                 fileName,
-                resolve,
-                reject,
+                resolve: settleResolve,
+                reject: settleReject,
             });
+
+            // Fallback: poll the result endpoint in case the WS event is never delivered.
+            const poll = async (): Promise<void> => {
+                pollTimer = null;
+                if (settled) {
+                    return;
+                }
+                try {
+                    settleResolve(await this.fetchFile(uuid, fileName));
+                } catch {
+                    // Result not ready yet (or a transient error) — keep polling until timeout.
+                    if (!settled) {
+                        pollTimer = setTimeout(() => void poll(), SLICING_POLL_INTERVAL_MS);
+                    }
+                }
+            };
+            pollTimer = setTimeout(() => void poll(), SLICING_POLL_INITIAL_DELAY_MS);
+
+            timeoutTimer = setTimeout(
+                () => settleReject('(504) Timed out waiting for slicing result'),
+                SLICING_TIMEOUT_MS,
+            );
         });
     }
 
@@ -212,10 +275,14 @@ export class SlicingClient {
             throw new Error('POST request error: missing uuid');
         }
 
-        this.websocket?.send(JSON.stringify({
-            event: 'client_received_uuid',
-            uuid: responseData.uuid,
-        }));
+        // Best-effort WS subscription for the fast path; only valid on an OPEN socket.
+        // If the socket isn't up, the polling fallback still delivers the result.
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            this.websocket.send(JSON.stringify({
+                event: 'client_received_uuid',
+                uuid: responseData.uuid,
+            }));
+        }
 
         return responseData.uuid;
     }
@@ -235,6 +302,11 @@ export class SlicingClient {
         }
 
         const blob = await response.blob();
+        if (blob.size === 0) {
+            // A ready result is never empty; treat this as "not ready yet" so the
+            // polling fallback keeps waiting instead of resolving with a 0-byte file.
+            throw new Error('empty result');
+        }
         return new File([blob], fileName);
     }
 }
