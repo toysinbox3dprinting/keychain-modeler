@@ -75,7 +75,7 @@ export const createKeychainTop = async (
         return text;
     }
 
-    const emojiFontPath = input.shape === 'dino' ? input.dinoFontPath : input.emojiFontPath;
+    const emojiFontPath = input.decorFontPaths[input.shape] ?? input.emojiFontPath;
     const emoji = await createSVG(input.shape, emojiFontPath, 16, 2, 3);
     emoji.translate(0, 0, options.emojiZOffset);
 

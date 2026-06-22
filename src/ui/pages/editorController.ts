@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import BebasFont from '../assets/fonts/BebasNeue.otf';
 import EmojiFont from '../assets/fonts/NotoEmoji-Regular.ttf';
 import DinoFont from '../assets/fonts/KeychainDino.ttf';
+import SeedFont from '../assets/fonts/KeychainSeed.ttf';
 import {
     createKeychainModel,
     createPreviewBaseOutput,
@@ -11,6 +12,13 @@ import { serializeKeychainObj } from '@core/modeling/objSerializer';
 import { SlicingClient } from '@infra/slicing/slicingClient';
 import { getSlicingCredentials } from '@infra/slicing/slicingConfig';
 import { BaseMeshOutput, PreviewMeshOutput } from '../state/editorTypes';
+
+// Decors drawn from our own SVG artwork, each rendered from a dedicated
+// single-glyph font (the legacy Noto Emoji font lacks these glyphs).
+const DECOR_FONT_PATHS: Record<string, string> = {
+    dino: DinoFont,
+    seed: SeedFont,
+};
 
 const createGeometry = (vertexData: Float32Array, indices: number[]): THREE.BufferGeometry => {
     const geometry = new THREE.BufferGeometry();
@@ -40,7 +48,7 @@ export class EditorController {
             shape,
             textFontPath: BebasFont,
             emojiFontPath: EmojiFont,
-            dinoFontPath: DinoFont,
+            decorFontPaths: DECOR_FONT_PATHS,
         });
 
         const indexArray = output.mesh.indices.flat();
@@ -75,7 +83,7 @@ export class EditorController {
             shape,
             textFontPath: BebasFont,
             emojiFontPath: EmojiFont,
-            dinoFontPath: DinoFont,
+            decorFontPaths: DECOR_FONT_PATHS,
         });
 
         return serializeKeychainObj(keychainModel);

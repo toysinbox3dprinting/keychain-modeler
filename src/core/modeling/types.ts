@@ -14,6 +14,7 @@ export type KeychainShape =
     | 'bear'
     | 'fish'
     | 'dino'
+    | 'seed'
     | 'none'
     | string;
 
@@ -24,9 +25,10 @@ export interface KeychainBuildInput {
     shape: KeychainShape;
     textFontPath: string;
     emojiFontPath: string;
-    // The default emoji font (Noto Emoji v1.05) has no sauropod (1F995) glyph, so the
-    // dino is rendered from a dedicated single-glyph font built from our own SVG.
-    dinoFontPath: string;
+    // Some decors (dino, seed) are our own artwork and aren't present in the legacy
+    // Noto Emoji font, so each is rendered from a dedicated single-glyph font built
+    // from its SVG. Keyed by shape; shapes absent here use emojiFontPath.
+    decorFontPaths: Record<string, string>;
 }
 
 export interface KeychainTextOptions {

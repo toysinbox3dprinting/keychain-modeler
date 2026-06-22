@@ -3,11 +3,16 @@
     src: url('../assets/fonts/NotoEmoji-Regular.ttf');
 }
 
-/* Sauropod (1F995) is missing from the legacy Emoji font; render it from a
-   dedicated single-glyph font derived from our own dino SVG instead. */
+/* Decors drawn from our own SVG artwork are missing from the legacy Emoji
+   font; each is rendered from a dedicated single-glyph font instead. */
 @font-face {
     font-family: 'DinoEmoji';
     src: url('../assets/fonts/KeychainDino.ttf');
+}
+
+@font-face {
+    font-family: 'SeedEmoji';
+    src: url('../assets/fonts/KeychainSeed.ttf');
 }
 
 .emoji-container {
@@ -35,6 +40,11 @@
 .dino-font {
     line-height: 12pt;
     font-family: 'DinoEmoji' !important;
+}
+
+.seed-font {
+    line-height: 12pt;
+    font-family: 'SeedEmoji' !important;
 }
 
 @media only screen and (max-width: 1200px) {
