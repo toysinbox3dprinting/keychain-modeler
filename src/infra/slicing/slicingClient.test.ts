@@ -17,10 +17,9 @@ describe('SlicingClient', () => {
         vi.unstubAllGlobals();
     });
 
-    it('resolves via /fetch-result polling when the WS completion event never arrives', async () => {
-        // Reproduces the handshake race: the server finishes before our WS subscription
-        // registers, so the completion notification is dropped. /fetch-result returns
-        // 404 until the job is done, then the bytes. The client must still resolve.
+    it('resolves by polling /fetch-result until the result is ready', async () => {
+        // /fetch-result returns 404 until the job is done, then the bytes. The client
+        // polls until it gets a non-empty 200.
         let fetchResultCalls = 0;
         const fetchMock = vi.fn(async (url: string) => {
             if (url.endsWith('/cloud-convert/file-upload')) {

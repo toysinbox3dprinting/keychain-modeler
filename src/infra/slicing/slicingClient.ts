@@ -1,88 +1,35 @@
 import {
     ClientRequestResult,
-    ServerRequestStatus,
     TaskConvertConfig,
     TaskSliceConfig,
     ToysinboxLoginCredentials,
 } from './slicingTypes';
 
-type PendingRequest = {
-    fileName: string;
-    resolve: (file: File) => void;
-    reject: (reason?: string) => void;
-};
-
-// The server's WebSocket completion notification can be lost when a job finishes
-// before our `client_received_uuid` subscription registers (a handshake race that
-// is more likely the faster the job is). To avoid hanging forever on a missed
-// event, we also poll /fetch-result as a fallback and time the whole wait out.
+// Slicing results are delivered by polling /fetch-result over HTTP. The server's
+// WebSocket "finished" notification was unreliable: a job often completes before
+// the client's subscription registers (a handshake race), so the event is dropped
+// and the export hangs. Polling makes completion independent of that event.
 const SLICING_POLL_INITIAL_DELAY_MS = 400;
 const SLICING_POLL_INTERVAL_MS = 800;
 const SLICING_TIMEOUT_MS = 120_000;
 
-export class SlicingClient {
-    private websocket: WebSocket | null = null;
-    private pendingRequests = new Map<string, PendingRequest>();
-    private cleanupInterval: ReturnType<typeof setInterval> | null = null;
-    private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+export class SlicingClient {
     constructor(
         private readonly credentials: ToysinboxLoginCredentials,
         private readonly doLogging = false,
     ) {}
 
+    // No persistent connection is needed; reachability is checked per request.
+    // Kept for API compatibility and to signal UI readiness.
     connect(onReady?: () => void): Promise<boolean> {
-        this.ensureCleanupInterval();
-
-        return new Promise<boolean>((resolve) => {
-            const websocket = new WebSocket(this.credentials.websocket_server);
-            this.websocket = websocket;
-
-            websocket.addEventListener('open', () => {
-                if (this.doLogging) {
-                    console.log('opened websocket server');
-                }
-                onReady?.();
-                resolve(true);
-            });
-
-            websocket.addEventListener('error', (error) => {
-                if (this.doLogging) {
-                    console.log('websocket error', error);
-                }
-                resolve(false);
-            });
-
-            websocket.addEventListener('message', (event) => {
-                void this.handleMessage(event);
-            });
-
-            websocket.addEventListener('close', () => {
-                if (this.doLogging) {
-                    console.log('websocket closed, reconnecting...');
-                }
-                this.scheduleReconnect(onReady);
-            });
-        });
+        onReady?.();
+        return Promise.resolve(true);
     }
 
     disconnect(): void {
-        if (this.cleanupInterval) {
-            clearInterval(this.cleanupInterval);
-            this.cleanupInterval = null;
-        }
-        if (this.reconnectTimeout) {
-            clearTimeout(this.reconnectTimeout);
-            this.reconnectTimeout = null;
-        }
-
-        if (this.websocket) {
-            this.websocket.close();
-            this.websocket = null;
-        }
-
-        this.pendingRequests.forEach((request) => request.reject('client disconnected'));
-        this.pendingRequests.clear();
+        // No persistent connection to tear down.
     }
 
     async convert(config: TaskConvertConfig, file: File): Promise<File> {
@@ -91,75 +38,6 @@ export class SlicingClient {
 
     async slice(config: TaskSliceConfig, file: File): Promise<File> {
         return this.startProcessing('cloud-slice/file-upload', config, file, 'x3g');
-    }
-
-    private ensureCleanupInterval(): void {
-        if (this.cleanupInterval) {
-            return;
-        }
-
-        this.cleanupInterval = setInterval(() => {
-            if (this.pendingRequests.size === 0) {
-                this.pendingRequests.clear();
-            }
-        }, 1000);
-    }
-
-    private scheduleReconnect(onReady?: () => void): void {
-        if (this.reconnectTimeout) {
-            return;
-        }
-
-        this.reconnectTimeout = setTimeout(() => {
-            this.reconnectTimeout = null;
-            void this.connect(onReady);
-        }, 250);
-    }
-
-    private async handleMessage(event: MessageEvent): Promise<void> {
-        let data: ServerRequestStatus;
-        try {
-            data = JSON.parse(event.data.toString()) as ServerRequestStatus;
-        } catch (error) {
-            if (this.doLogging) {
-                console.error('(500) Malformed response from server', error);
-            }
-            return;
-        }
-
-        if (!data.event || !data.uuid) {
-            const pendingMalformed = data.uuid ? this.pendingRequests.get(data.uuid) : undefined;
-            pendingMalformed?.reject('(500) Malformed response from server');
-            if (pendingMalformed) {
-                this.pendingRequests.delete(data.uuid);
-            }
-            return;
-        }
-
-        const pending = this.pendingRequests.get(data.uuid);
-        if (!pending) {
-            return;
-        }
-
-        if (data.event === 'server_finished_processing') {
-            if (this.doLogging) {
-                console.log('received finished update for', data.uuid);
-            }
-            try {
-                const file = await this.fetchFile(data.uuid, pending.fileName);
-                pending.resolve(file);
-            } catch (error) {
-                pending.reject(error instanceof Error ? error.message : String(error));
-            } finally {
-                this.pendingRequests.delete(data.uuid);
-            }
-            return;
-        }
-
-        if (data.event === 'server_failed_processing') {
-            pending.reject(`(500) Server failed processing file, ${data.description}`);
-            this.pendingRequests.delete(data.uuid);
-        }
     }
 
     private async startProcessing(
@@ -174,69 +52,26 @@ export class SlicingClient {
 
         const fileName = `${file.name.split('.').slice(0, -1).join('')}.${outputExtension}`;
         const uuid = await this.postFile(route, file, config);
+        return this.pollForResult(uuid, fileName);
+    }
 
-        return new Promise<File>((resolve, reject) => {
-            let settled = false;
-            let pollTimer: ReturnType<typeof setTimeout> | null = null;
-            let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+    private async pollForResult(uuid: string, fileName: string): Promise<File> {
+        const deadline = Date.now() + SLICING_TIMEOUT_MS;
+        await delay(SLICING_POLL_INITIAL_DELAY_MS);
 
-            const cleanup = (): void => {
-                this.pendingRequests.delete(uuid);
-                if (pollTimer) {
-                    clearTimeout(pollTimer);
+        while (Date.now() < deadline) {
+            try {
+                return await this.fetchFile(uuid, fileName);
+            } catch (error) {
+                // Result not ready yet (or a transient error) — keep polling until timeout.
+                if (this.doLogging) {
+                    console.log('slicing result not ready, retrying', error);
                 }
-                if (timeoutTimer) {
-                    clearTimeout(timeoutTimer);
-                }
-            };
+                await delay(SLICING_POLL_INTERVAL_MS);
+            }
+        }
 
-            const settleResolve = (resultFile: File): void => {
-                if (settled) {
-                    return;
-                }
-                settled = true;
-                cleanup();
-                resolve(resultFile);
-            };
-
-            const settleReject = (reason?: string): void => {
-                if (settled) {
-                    return;
-                }
-                settled = true;
-                cleanup();
-                reject(reason);
-            };
-
-            // Fast path: the WebSocket completion event resolves/rejects via this entry.
-            this.pendingRequests.set(uuid, {
-                fileName,
-                resolve: settleResolve,
-                reject: settleReject,
-            });
-
-            // Fallback: poll the result endpoint in case the WS event is never delivered.
-            const poll = async (): Promise<void> => {
-                pollTimer = null;
-                if (settled) {
-                    return;
-                }
-                try {
-                    settleResolve(await this.fetchFile(uuid, fileName));
-                } catch {
-                    // Result not ready yet (or a transient error) — keep polling until timeout.
-                    if (!settled) {
-                        pollTimer = setTimeout(() => void poll(), SLICING_POLL_INTERVAL_MS);
-                    }
-                }
-            };
-            pollTimer = setTimeout(() => void poll(), SLICING_POLL_INITIAL_DELAY_MS);
-
-            timeoutTimer = setTimeout(
-                () => settleReject('(504) Timed out waiting for slicing result'),
-                SLICING_TIMEOUT_MS,
-            );
-        });
+        throw new Error('(504) Timed out waiting for slicing result');
     }
 
     private async postFile(
@@ -275,15 +110,6 @@ export class SlicingClient {
             throw new Error('POST request error: missing uuid');
         }
 
-        // Best-effort WS subscription for the fast path; only valid on an OPEN socket.
-        // If the socket isn't up, the polling fallback still delivers the result.
-        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-            this.websocket.send(JSON.stringify({
-                event: 'client_received_uuid',
-                uuid: responseData.uuid,
-            }));
-        }
-
         return responseData.uuid;
     }
 
@@ -303,8 +129,7 @@ export class SlicingClient {
 
         const blob = await response.blob();
         if (blob.size === 0) {
-            // A ready result is never empty; treat this as "not ready yet" so the
-            // polling fallback keeps waiting instead of resolving with a 0-byte file.
+            // A ready result is never empty; treat as "not ready" so polling continues.
             throw new Error('empty result');
         }
         return new File([blob], fileName);
